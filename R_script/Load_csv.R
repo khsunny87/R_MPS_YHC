@@ -4,7 +4,7 @@ library(stringr)
 library(moonBook)
 
 
-#loa
+#load by Sun Kim
 fname<-'MPS_data.csv'
 
 read_csv(fname,n_max=2,col_names=F)%>%t()%>%as.data.frame()->tmp
