@@ -1,0 +1,384 @@
+<style>
+pre {
+  overflow-x: auto;
+}
+pre code {
+  word-wrap: normal;
+  white-space: pre;
+}
+</style>
+
+
+---
+title: "MPS_YHC"
+author: "Hongsun Kim"
+date: '2020 8 19 '
+output: html_document
+---
+```{r global_options, echo = FALSE, include = FALSE,warning = FALSE, message = FALSE}
+options(width = 999)
+knitr::opts_chunk$set(echo = F,message=F,comment=NA)
+Sys.setlocale(category = "LC_CTYPE", locale = "ko_KR.UTF-8")
+```
+
+
+# Inclusion criteria
+## 선정기준
+- 1995년 11월부터 2018년 12월까지 급성 A형 대동맥 박리술 환자 중 수술을 받은 자
+
+## 제외기준
+- 급성 대동맥 박리가 아닌 경우, 대동맥 박리 없는 대동맥 벽내 혈종 환자
+
+
+N=470
+
+CMPS - 관류부전 + 임상적 증거
+
+SCMPS - 관류부전 w/o 임상적 증거
+
+# 기본분석
+```{r results = 'asis'}
+library(tidyr)
+source("R_script/Load_Excel.R")
+library(ztable)
+options(ztable.type="html")
+
+anal_data%>%
+  select(Cate_Gr,Info_Male,Info_Age)%>%
+  mytable(Cate_Gr~.,data=.,show.total=TRUE)%>%compress(add.label=F)%>%
+  ztable()
+
+
+
+anal_data%>%
+  select(starts_with('Cate_'))%>%
+  mytable(Cate_Gr~.-`Cate_preopCT유무`-`Cate_내용`-`Cate_sxFU`,data=.,method=3,catMethod=0,show.total=TRUE)%>%
+  compress(add.label=F)%>%
+  ztable()
+
+
+anal_data%>%
+  select(Cate_Gr,starts_with('PMH_'))%>%
+  mytable(Cate_Gr~.,data=.,method=3,catMethod=0,show.total=TRUE)%>%
+  compress(add.label=F)%>%
+  ztable()
+
+anal_data%>%
+  select(Cate_Gr,starts_with('Lab_'))%>%
+  mytable(Cate_Gr~.-Lab_TnT,data=.,show.total=TRUE)%>%
+  ztable()
+
+anal_data%>%
+  select(Cate_Gr,starts_with('Op_'))%>%
+  mytable(Cate_Gr~.-Op_Asc-Op_Hemi-Op_Partial-Op_Total-Op_Desc-Op_TA-Op_Abdao-Op_Iliac,data=.,method=3,catMethod=0,show.total=TRUE)%>%compress(add.label='F')%>%
+  ztable()
+
+anal_data%>%
+  select(Cate_Gr,starts_with('Comb_'))%>%
+  mytable(Cate_Gr~.-Comb_PVDbypssname,data=.,method=3,catMethod=0,show.total=TRUE)%>%
+  compress(add.label='F')%>%
+  ztable()
+
+anal_data$CPB_TCA<-parse_number(anal_data$CPB_TCA)
+anal_data$CPB_SCP<-parse_number(anal_data$CPB_SCP)
+#anal_data$CPB_nasal_T<-parse_number(anal_data$CPB_nasal_T)
+#anal_data$CPB_rect_bladder_T<-parse_number(anal_data$CPB_rect_bladder_T)
+
+anal_data%>%
+  select(Cate_Gr,starts_with('CPB_'))%>%
+  mytable(Cate_Gr~.,data=.,show.total=TRUE)%>%
+  ztable()
+
+
+anal_data%>%
+  select(Cate_Gr,starts_with('PostOp_'))%>%
+  mytable(Cate_Gr~.,data=.,show.total=TRUE)%>%
+  ztable()
+
+anal_data%>%
+  select(Cate_Gr,starts_with('Cx_'))%>%
+  mytable(Cate_Gr~.,data=.,method=3,catMethod=0,show.total=TRUE)%>%
+  compress(add.label='F')%>%
+  ztable()
+
+anal_data%>%
+ mytable(Cate_Gr~DO_interval,data=.,show.total=TRUE)%>%
+ ztable()
+
+
+
+```
+
+# 생존분석
+## Overall(long term) Survival
+```{r warning = FALSE, message = FALSE,results = 'asis'}
+
+library(survival)
+library(survminer)
+
+anal_data$TS<-Surv(anal_data$Outcome_fum_mo,anal_data$Outcome_Death)
+OS<-survfit(TS~1,data=anal_data)
+print(OS)
+summary(OS,times=60)
+summary(OS,times=120)
+ggsurvplot(OS,data=anal_data,risk.table=T,pval=T)
+
+
+#survfit(TS~Cate_renSCM,data=anal_data)%>%ggsurvplot(.,data=anal_data,risk.table=T,pval=T)
+  
+
+
+fit1<-survfit(TS~Cate_Gr,data=anal_data)
+print(fit1)
+summary(fit1,times=60)
+summary(fit1,times=120)
+ggsurvplot(fit1,data=anal_data,risk.table=F,pval=F,break.time.by = 30,xlim = c(0, 120),legend.labs = c("CM", "SCM", "NoMP"))
+
+
+anal_data%>%
+  filter(Cate_Gr %in% c(1,3))%>%
+  survdiff(TS~Cate_Gr,data=.)
+anal_data%>%
+  filter(Cate_Gr %in% c(2,3))%>%
+  survdiff(TS~Cate_Gr,data=.)
+anal_data%>%
+  filter(Cate_Gr %in% c(1,2))%>%
+  survdiff(TS~Cate_Gr,data=.)
+
+
+cox_trim<-anal_data%>%
+  mutate(Cate_F=as.factor(-Cate_Gr),Op_factor=as.factor(Op_SurType),PMH_smk=PMH_preSmok>0)%>%
+  select(TS,Info_Male,Info_Age,starts_with('Cate_'),starts_with('PMH_'),starts_with('Lab_'),starts_with('Op_'),starts_with('Comb_'),starts_with('CPB_'),DO_interval)%>%
+  select(-PMH_preSmok,-Cate_Gr,-Cate_preopCT유무,-Cate_내용,-Cate_sxFU,-Lab_TnT,-Op_SurType,-Op_Asc,-Op_Hemi,-Op_Partial,-Op_Desc,-Op_TA,-Op_Abdao,-Op_Iliac,-Comb_PVDbypssname)
+
+uv_out=mycph(TS~.,data=cox_trim)
+uv_out%>%ztable
+
+print("p<0.05")
+uv_out%>%
+  filter(p<0.05)%>%
+  ztable()
+
+print("p<0.2")
+uv_out%>%
+  filter(p<0.2)%>%
+  ztable()
+
+
+candi<-uv_out%>%
+  filter(p<0.2)%>%row.names()
+
+print(candi)
+
+candi2<-c("Info_Male","Info_Age","Cate_F","PMH_preHTN","PMH_smk","PMH_Marfan","Op_Root","Op_Total","Comb_CABG","CPB_CPB","DO_interval")
+
+#candi2<-c("Info_Male","Info_Age","Cate_CMPS","Cate_SCMPS","PMH_preHTN","PMH_smk","PMH_Marfan","Op_Root","Op_factor","Comb_CABG","CPB_CPB")
+
+#candi2<-c("Info_Male","Info_Age","Cate_CMPS","Cate_SCMPS","PMH_preHTN","PMH_smk","PMH_Marfan","Lab_CRP","Lab_AST","Lab_Amylise","Op_Root","Op_factor","Comb_CABG","CPB_CPB")
+
+#candi2<-c("Info_Male","Info_Age","Cate_CMPS","Cate_coroSCM","Cate_renSCM","Cate_ExtSCM","Cate_VisSCM","PMH_preHTN","PMH_smk","PMH_Marfan","Lab_CRP","Lab_AST","Lab_Amylise","Op_Root","Op_factor","Comb_CABG","CPB_CPB")
+
+#candi2<-c("Info_Male","Info_Age","Cate_NeuMPS","Cate_RenMPS","Cate_ExtMPS","Cate_VisMPS","Cate_coroSCM","Cate_renSCM","Cate_ExtSCM","Cate_VisSCM","PMH_preHTN","PMH_smk","PMH_Marfan","Lab_CRP","Lab_AST","Lab_Amylise","Op_Root","Op_factor","Comb_CABG","CPB_CPB")
+
+#candi
+
+mv_out<-cox_trim%>%
+  #mutate(MPS=(Cate_F==-1))%>%
+  select(TS,contains(candi2))%>%
+  #select(-Cate_CMPS,-Cate_SCMPS)%>%
+  #select(-starts_with("Lab_"))%>%
+  coxph(TS~.,data=.)
+mv_out%>%ztable()
+
+p_v<-summary(mv_out)$coefficients%>%.[,5]
+p_v[p_v<0.05]
+
+
+
+cox_trim%>%
+  select(TS,contains(candi2))%>%na.omit()->
+  mv_trim
+
+mv_out<-coxph(TS~.,data = mv_trim)
+res<-step(mv_out,direction='backward')
+res%>%ztable()
+```
+
+## Early Survival
+
+```{r warning = FALSE, message = FALSE,results = 'asis'}
+
+
+cutoff<-1
+fu<-ifelse(anal_data$Outcome_fum_mo<cutoff,anal_data$Outcome_fum_mo,cutoff)
+death<-ifelse(anal_data$Outcome_fum_mo<cutoff&anal_data$Outcome_Death,TRUE,FALSE)
+
+anal_data$EM_TS<-Surv(fu,death)
+
+EM_fit<-survfit(EM_TS~Cate_Gr,data=anal_data)
+print(EM_fit)
+ggsurvplot(EM_fit,data=anal_data,risk.table=T,pval=T)
+summary(OS,times=1)
+summary(EM_fit,times=1)
+
+anal_data%>%
+  filter(Cate_Gr %in% c(1,3))%>%
+  survdiff(EM_TS~Cate_Gr,data=.)
+
+anal_data%>%
+  filter(Cate_Gr %in% c(2,3))%>%
+  survdiff(EM_TS~Cate_Gr,data=.)
+anal_data%>%
+  filter(Cate_Gr %in% c(1,2))%>%
+  survdiff(EM_TS~Cate_Gr,data=.)
+
+cox_trim<-anal_data%>%
+  mutate(Cate_F=as.factor(-Cate_Gr),Op_factor=as.factor(Op_SurType),PMH_smk=as.factor(PMH_preSmok))%>%
+  select(EM_TS,Info_Male,Info_Age,starts_with('Cate_'),starts_with('PMH_'),starts_with('Lab_'),starts_with('Op_'),starts_with('Comb_'),starts_with('CPB_'))%>%
+  select(-PMH_preSmok,-Cate_Gr,-Cate_preopCT유무,-Cate_내용,-Cate_sxFU,-Lab_TnT,-Op_SurType,-Op_Asc,-Op_Hemi,-Op_Partial,-Op_Total,-Op_Desc,-Op_TA,-Op_Abdao,-Op_Iliac,-Comb_PVDbypssname)
+
+uv_out=mycph(EM_TS~.,data=cox_trim)
+uv_out%>%ztable
+
+print("p<0.05")
+uv_out%>%
+  filter(p<0.05)%>%
+  ztable()
+
+print("p<0.2")
+uv_out%>%
+  filter(p<0.2)%>%
+  ztable()
+
+candi<-uv_out%>%
+  filter(p<0.2)%>%row.names()
+
+print(candi)
+
+
+candi2<-c("Info_Male","Info_Age","Cate_CMPS","Cate_SCMPS","PMH_preHTN","PMH_smk","PMH_Marfan","Lab_CRP","Lab_AST","Lab_Amylise","Op_Root","Op_factor","Comb_CABG","CPB_CPB")
+
+#candi2<-c("Info_Male","Info_Age","Cate_CMPS","Cate_coroSCM","Cate_renSCM","Cate_ExtSCM","Cate_VisSCM","PMH_preHTN","PMH_smk","PMH_Marfan","Lab_CRP","Lab_AST","Lab_Amylise","Op_Root","Op_factor","Comb_CABG","CPB_CPB")
+
+#candi2<-c("Info_Male","Info_Age","Cate_NeuMPS","Cate_CoroMPS","Cate_RenMPS","Cate_ExtMPS","Cate_VisMPS","Cate_coroSCM","Cate_renSCM","Cate_ExtSCM","Cate_VisSCM","PMH_preHTN","PMH_smk","PMH_Marfan","Lab_CRP","Lab_AST","Lab_Amylise","Op_Root","Op_factor","Comb_CABG","CPB_CPB")
+#candi
+
+mv_out<-cox_trim%>%
+  #mutate(MPS=(Cate_F==-1))%>%
+  select(EM_TS,contains(candi2))%>%
+  #select(-Cate_CMPS,-Cate_SCMPS)%>%
+  #select(-starts_with("Lab_"))%>%
+  coxph(EM_TS~.,data=.)
+mv_out%>%ztable()
+
+p_v<-summary(mv_out)$coefficients%>%.[,5]
+p_v[p_v<0.05]
+
+
+
+cox_trim%>%
+  select(EM_TS,contains(candi2))%>%na.omit()->
+  mv_trim
+
+mv_out<-coxph(EM_TS~.,data = mv_trim)
+res<-step(mv_out,direction='backward')
+res%>%ztable()
+
+
+```
+
+## Landmark Survival
+
+```{r warning = FALSE, message = FALSE}
+
+
+LMS_surv<-anal_data%>%
+  filter(Outcome_Fu_m>cutoff)
+LMS_surv$TS<-Surv(LMS_surv$Outcome_Fu_m-cutoff,LMS_surv$Outcome_Death)
+LMS_fit<-survfit(TS~Cate_Gr,data=LMS_surv)
+
+print(LMS_fit)
+ggsurvplot(LMS_fit,data=LMS_surv,risk.table=T,pval=T)
+
+summary(LMS_fit,times=60)
+summary(LMS_fit,times=120)
+
+
+
+cox_trim<-LMS_surv%>%
+  mutate(Cate_F=as.factor(-Cate_Gr),Op_factor=as.factor(Op_SurType))%>%
+  select(TS,Info_Male,Info_Age,starts_with('Cate_'),starts_with('PMH_'),starts_with('Lab_'),starts_with('Op_'),starts_with('Comb_'),starts_with('CPB_'))%>%
+  select(-Cate_Gr,-Cate_preopCT유무,-Cate_내용,-Cate_sxFU,-Lab_TnT,-Op_SurType,-Op_Asc,-Op_Hemi,-Op_Partial,-Op_Total,-Op_Desc,-Op_TA,-Op_Abdao,-Op_Iliac,-Comb_PVDbypssname)
+
+out=mycph(TS~.,data=cox_trim)
+out
+out%>%
+  filter(p<0.05)
+
+candi<-out%>%
+  filter(p<0.2)%>%row.names()
+
+mv_out<-cox_trim%>%
+  #mutate(MPS=(Cate_F==-1))%>%
+  select(TS,contains(candi))%>%
+  select(-Cate_SCMPS)%>%
+  #select(-starts_with("Lab_"))%>%
+  coxph(TS~.,data=.)
+mv_out
+
+p_v<-summary(mv_out)$coefficients%>%.[,5]
+p_v[p_v<0.05]
+
+
+```
+
+## Period study
+1995~2008 vs. 2008~2018 - CMPS의 생존률 비교
+```{r warning = FALSE, message = FALSE}
+
+
+anal_data$period<-(anal_data$Info_Opdate<"2008-01-01")
+
+period_fit<-survfit(TS~period,data=anal_data%>%filter(Cate_Gr==1))
+print(period_fit)
+#summary(period_fit)
+ggsurvplot(period_fit,data=anal_data%>%filter(Cate_Gr==1),risk.table=T,pval=T)
+
+
+```
+
+## Reoperation
+
+```{r warning = FALSE, message = FALSE}
+
+tmp<-is.na(anal_data$Outcome_reop_m)
+anal_data$Outcome_reop_m[tmp]<-anal_data$Outcome_fum_mo[tmp]
+
+anal_data$reop_TS<-Surv(anal_data$Outcome_reop_m,anal_data$Outcome_reop)
+
+reop_fit<-survfit(reop_TS~Cate_Gr,data=anal_data)
+print(reop_fit)
+#summary(fit2)
+ggsurvplot(reop_fit,data=anal_data,risk.table=T,pval=T)
+
+```
+
+## 사망자 분석
+```{r warning = FALSE, message = FALSE,results='asis'}
+EM<-anal_data%>%
+  filter(Outcome_early_mortality==1)
+EM%>%
+  mytable(~Outcome_COD,data=.)%>%
+    compress(add.label=F)%>%
+  ztable()
+EM%>%
+  mytable(Cate_Gr~Outcome_COD,data=.)%>%
+    compress(add.label=F)%>%
+  ztable()
+
+```
+
+```{r}
+
+```
+
